@@ -1,5 +1,6 @@
 from collections import deque
 from labrad import connect
+import os
 
 from conductor.exceptions import ParameterInitializationError
 from conductor.exceptions import ParameterTerminationError
@@ -41,12 +42,14 @@ class ConductorParameter(object):
     """
     autostart = False
     call_in_thread = False
-    priority = 1
+    priority = None
     value_type = 'single'
     value = None
     value_queue = deque([])
 #    next_value = None
     previous_value = None
+
+    verbose = False
     
     def initialize(self, config={}):
         for k, v in config.items():
@@ -68,9 +71,10 @@ class ConductorParameter(object):
         except:
             raise ParameterTerminationError(self.name)
 
-    def connect_to_labrad(self):
+    def connect_to_labrad(self, host=os.getenv("LABRADHOST"),password = os.getenv("LABRADPASSWORD") ):
         connection_name = '{} - {}'.format(self.servername, self.name)
-        self.cxn = connect(name=connection_name)
+        self.cxn = connect(name=connection_name, host=host, password=password)
+
 
     def set_value(self, value):    
         """ set value, and value_queue if we want to scan parameter value """
@@ -103,7 +107,7 @@ class ConductorParameter(object):
             self.value = value
 
         elif self.value_type == 'data':
-            self.value = data
+            self.value = value
 
         return self.value
 
@@ -122,6 +126,15 @@ class ConductorParameter(object):
         except:
             raise ParameterGetValueError(self.name)
     
+    def get_next_value(self):
+        return self.next_value
+    
+    def _get_next_value(self):
+        try:
+            return self.get_next_value()
+        except:
+            raise ParameterGetValueError(self.name)
+    
     @property
     def next_value(self):
         if self.value_queue:
@@ -136,6 +149,8 @@ class ConductorParameter(object):
         # set value
         if self.value_queue:
             self.value = self.value_queue.popleft()
+        if self.value_type in ['once']:
+            self.value = None
         
         # append value to end of queue if looping
         if loop and self.value_queue:
